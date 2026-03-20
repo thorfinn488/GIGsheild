@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  --text: #eaf0ff;
+  --text-h: #ffffff;
+  --bg: #05080f;
+  --border: rgba(255, 255, 255, 0.12);
+  --code-bg: rgba(255, 255, 255, 0.06);
+  --accent: #ff9933;
+  --accent-bg: rgba(255, 153, 51, 0.1);
+  --accent-border: rgba(255, 153, 51, 0.55);
+  --success: #00e5a0;
+  --danger: #ff4444;
+
+  --sans: "Cabinet Grotesk", system-ui, "Segoe UI", Roboto, sans-serif;
+  --heading: "Clash Display", "Cabinet Grotesk", system-ui, "Segoe UI", Roboto, sans-serif;
+
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--sans);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+

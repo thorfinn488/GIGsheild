@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+psycopg2-binary
+python-jose[cryptography]
+pydantic
+pydantic-settings
+celery[redis]
+redis
+requests
+numpy
+pandas
+scikit-learn
+

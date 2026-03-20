@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: gigshield
+      POSTGRES_PASSWORD: gigshield
+      POSTGRES_DB: gigshield
+    ports:
+      - "5432:5432"
+    volumes:
+      - gigshield_pg:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: postgresql+psycopg2://gigshield:gigshield@db:5432/gigshield
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: gigshield-dev-secret
+      TRIGGER_POLL_MINUTES: "5"
+    ports:
+      - "8000:8000"
+
+  celery-worker:
+    build: ./backend
+    depends_on:
+      - db
+      - redis
+    command: celery -A app.tasks.celery_app worker -l info
+    environment:
+      DATABASE_URL: postgresql+psycopg2://gigshield:gigshield@db:5432/gigshield
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: gigshield-dev-secret
+      TRIGGER_POLL_MINUTES: "5"
+
+  celery-beat:
+    build: ./backend
+    depends_on:
+      - db
+      - redis
+    command: celery -A app.tasks.celery_app beat -l info
+    environment:
+      DATABASE_URL: postgresql+psycopg2://gigshield:gigshield@db:5432/gigshield
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: gigshield-dev-secret
+      TRIGGER_POLL_MINUTES: "5"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  gigshield_pg:
+
