@@ -1,34 +1,7 @@
 import { useMemo, useState } from 'react'
-
-type RiskBreakdown = {
-  floodDaysPerYear: number
-  aqiSpikeDaysPerYear: number
-  strikeFrequency: number
-}
-
-type RiskProfile = {
-  zoneRiskScore: number
-  breakdown: RiskBreakdown
-  weeklyPremium: number
-  weeklyCoverage: number
-  zoneLabel: string
-  platform: string
-}
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-
-async function apiPost<T>(path: string, body: unknown, token?: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-  return (await res.json()) as T
-}
+import { apiPost } from '../lib/api/client'
+import { setStoredAuthToken } from '../lib/auth/storage'
+import type { RiskProfile } from '../types/api'
 
 export default function Onboard() {
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -74,8 +47,8 @@ export default function Onboard() {
     setSending(true)
     try {
       const payload = { mobile: mobile.replace(/\s+/g, '') }
-      const data = await apiPost<{ otp: string; expiresIn: number }>('/api/auth/send-otp', payload)
-      setSentOtp(data.otp)
+      const data = await apiPost<{ otp?: string; expiresIn: number }>('/api/auth/send-otp', payload)
+      setSentOtp(data.otp ?? null)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed')
     } finally {
@@ -94,7 +67,7 @@ export default function Onboard() {
       const payload = { mobile: mobile.replace(/\s+/g, ''), otp: otpValue }
       const data = await apiPost<{ access_token: string; token_type: string }>('/api/auth/verify-otp', payload)
       setToken(data.access_token)
-      localStorage.setItem('gigshield_token', data.access_token)
+      setStoredAuthToken(data.access_token)
       setStep(2)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'OTP verification failed')

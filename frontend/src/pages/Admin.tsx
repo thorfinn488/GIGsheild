@@ -1,32 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-
-function authHeader(): Record<string, string> {
-  const token = localStorage.getItem('gigshield_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { headers: authHeader() })
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
-  return (await res.json()) as T
-}
-
-type AdminStats = {
-  activePolicies: number
-  lossRatioPct: number
-  fraudBlockedRupees: number
-  weeklyPremiumPoolRupees: number
-}
-
-type FraudPattern = {
-  pattern: string
-  count: number
-}
-
-type PredictionDay = { day: string; riskPct: number; level: 'Low' | 'Moderate' | 'High' }
+import { apiGet } from '../lib/api/client'
+import type { AdminStats, FraudPattern, PredictionDay } from '../types/api'
 
 export default function Admin() {
   const [stats, setStats] = useState<AdminStats | null>(null)

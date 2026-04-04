@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import datetime as dt
-import random
+import os
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.db import get_db
 from app.models import Worker
+from app.otp_utils import generate_numeric_otp, normalize_mobile, otp_length
 from app.routes.common import get_current_user
 from app.security import create_access_token
 from app.schemas import AuthTokenResponse, SendOtpRequest, VerifyOtpRequest
@@ -14,8 +15,12 @@ from app.schemas import AuthTokenResponse, SendOtpRequest, VerifyOtpRequest
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# Phase-1 mock OTP store (in-memory).
+# In-memory OTP store: normalized mobile -> (code, expiry). Replace with Redis + SMS in production.
 OTP_STORE: dict[str, tuple[str, dt.datetime]] = {}
+_LAST_OTP_SEND: dict[str, dt.datetime] = {}
+
+OTP_TTL_SECONDS = 300
+RESEND_COOLDOWN_SECONDS = 45
 
 DEFAULT_ZONE = "Mumbai — Andheri West"
 DEFAULT_CITY = "Mumbai"
@@ -26,30 +31,55 @@ def _is_admin_mobile(mobile: str) -> bool:
     return mobile.endswith("0000")
 
 
+def _return_otp_in_response() -> bool:
+    """When false, OTP is not included in JSON (use with real SMS). Default true for local/demo."""
+    return os.environ.get("RETURN_OTP_IN_RESPONSE", "true").lower() in ("1", "true", "yes")
+
+
 @router.post("/send-otp")
 def send_otp(req: SendOtpRequest, db=Depends(get_db)) -> dict:
-    otp = "1234"  # stable demo OTP
-    # otp = f"{random.randint(0,9999):04d}"  # could randomize in real flow
-    expires_at = dt.datetime.utcnow() + dt.timedelta(seconds=300)
-    OTP_STORE[req.mobile] = (otp, expires_at)
-    return {"success": True, "otp": otp, "expiresIn": 300}
+    mobile = normalize_mobile(req.mobile)
+    if not mobile or len(mobile) < 10:
+        raise HTTPException(status_code=400, detail="Invalid mobile number")
+
+    now = dt.datetime.utcnow()
+    last = _LAST_OTP_SEND.get(mobile)
+    if last and (now - last).total_seconds() < RESEND_COOLDOWN_SECONDS:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Please wait {RESEND_COOLDOWN_SECONDS}s before requesting another OTP",
+        )
+
+    otp = generate_numeric_otp()
+    expires_at = now + dt.timedelta(seconds=OTP_TTL_SECONDS)
+    OTP_STORE[mobile] = (otp, expires_at)
+    _LAST_OTP_SEND[mobile] = now
+
+    out: dict = {"success": True, "expiresIn": OTP_TTL_SECONDS, "otpLength": otp_length()}
+    if _return_otp_in_response():
+        out["otp"] = otp
+    return out
 
 
 @router.post("/verify-otp", response_model=AuthTokenResponse)
 def verify_otp(req: VerifyOtpRequest, db=Depends(get_db)) -> AuthTokenResponse:
-    stored = OTP_STORE.get(req.mobile)
+    mobile = normalize_mobile(req.mobile)
+    entered = "".join(req.otp.split())
+    stored = OTP_STORE.get(mobile)
     if not stored:
-        raise ValueError("OTP not requested")
+        raise HTTPException(status_code=400, detail="OTP not requested for this number")
     otp, expires_at = stored
-    if dt.datetime.utcnow() > expires_at or req.otp != otp:
-        raise ValueError("Invalid OTP")
+    if dt.datetime.utcnow() > expires_at or entered != otp:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
-    worker = db.query(Worker).filter(Worker.mobile == req.mobile).first()
-    role = "admin" if _is_admin_mobile(req.mobile) else "worker"
+    worker = db.query(Worker).filter(Worker.mobile == mobile).first()
+    OTP_STORE.pop(mobile, None)
+
+    role = "admin" if _is_admin_mobile(mobile) else "worker"
     if not worker:
         worker = Worker(
             name="Gig Worker",
-            mobile=req.mobile,
+            mobile=mobile,
             zone=DEFAULT_ZONE,
             city=DEFAULT_CITY,
             platform="Zomato",

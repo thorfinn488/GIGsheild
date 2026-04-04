@@ -1,56 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PieChart, Pie, Cell } from 'recharts'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-
-function authHeader(): Record<string, string> {
-  const token = localStorage.getItem('gigshield_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-type Me = {
-  id: number
-  name: string
-  zone: string
-  city: string
-  risk_score: number
-}
-
-type Policy = {
-  id: number
-  weeklyCoverage: number
-  weeklyPremium: number
-  daysRemaining: number
-}
-
-type TriggerItem = {
-  id: number
-  type: string
-  status: 'PAYOUT' | 'MONITORING' | 'ACTIVE' | 'CLEAR'
-  dataSource: string
-  threshold: string
-  actualValue: number | null
-}
-
-type ClaimItem = {
-  id: number
-  status: 'APPROVED' | 'REJECTED' | 'PENDING'
-  fraudScore: number
-  createdAt: string
-}
-
-type PayoutItem = {
-  id: number
-  amount: number
-  status: string
-  processedAt: string
-}
-
-async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { headers: authHeader() })
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
-  return (await res.json()) as T
-}
+import { apiGet } from '../lib/api/client'
+import type { ClaimItem, Me, PayoutItem, Policy, TriggerItem } from '../types/api'
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
